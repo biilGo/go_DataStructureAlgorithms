@@ -3,7 +3,6 @@ package main // import “golang”
 
 // 导入其他地方的包，包通过go mod机制寻找
 import (
-	"/Users/Administrator/Documents/GitHub/go_pkg/01.简单入门Golang/001.包和变量和函数/diy"
 	"fmt"
 )
 
