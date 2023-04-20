@@ -333,3 +333,381 @@ if newTreeNode == nil {
 插入元素进行调整后,需要递归向上更新每一棵子树高度,其时间复杂度为`log(n)`,但可以优化,当两棵子树高度都没有变化时,那么上面的父层子树都不需要更新树高度,直接退出,由于是递归程序,如何向上传递信息,引入了额外空间成本,且不可避免仍然会出现所有层级的父节点都必须更新树高度,优化意义不是很大
 
 ## AVL树查找元素等操作
+其他操作与二叉查找树通用,代码:
+```go
+// 找出最小值的节点
+func (tree *AVLTree) FindMinValue() *AVLTreeNode {
+    if tree.Root == nil {
+        // 如果是空树，返回空
+        return nil
+    }
+    return tree.Root.FindMinValue()
+}
+func (node *AVLTreeNode) FindMinValue() *AVLTreeNode {
+    // 左子树为空，表面已经是最左的节点了，该值就是最小值
+    if node.Left == nil {
+        return node
+    }
+    // 一直左子树递归
+    return node.Left.FindMinValue()
+}
+// 找出最大值的节点
+func (tree *AVLTree) FindMaxValue() *AVLTreeNode {
+    if tree.Root == nil {
+        // 如果是空树，返回空
+        return nil
+    }
+    return tree.Root.FindMaxValue()
+}
+func (node *AVLTreeNode) FindMaxValue() *AVLTreeNode {
+    // 右子树为空，表面已经是最右的节点了，该值就是最大值
+    if node.Right == nil {
+        return node
+    }
+    // 一直右子树递归
+    return node.Right.FindMaxValue()
+}
+// 查找指定节点
+func (tree *AVLTree) Find(value int64) *AVLTreeNode {
+    if tree.Root == nil {
+        // 如果是空树，返回空
+        return nil
+    }
+    return tree.Root.Find(value)
+}
+func (node *AVLTreeNode) Find(value int64) *AVLTreeNode {
+    if value == node.Value {
+        // 如果该节点刚刚等于该值，那么返回该节点
+        return node
+    } else if value < node.Value {
+        // 如果查找的值小于节点值，从节点的左子树开始找
+        if node.Left == nil {
+            // 左子树为空，表示找不到该值了，返回nil
+            return nil
+        }
+        return node.Left.Find(value)
+    } else {
+        // 如果查找的值大于节点值，从节点的右子树开始找
+        if node.Right == nil {
+            // 右子树为空，表示找不到该值了，返回nil
+            return nil
+        }
+        return node.Right.Find(value)
+    }
+}
+// 中序遍历
+func (tree *AVLTree) MidOrder() {
+    tree.Root.MidOrder()
+}
+func (node *AVLTreeNode) MidOrder() {
+    if node == nil {
+        return
+    }
+    // 先打印左子树
+    node.Left.MidOrder()
+    // 按照次数打印根节点
+    for i := 0; i <= int(node.Times); i++ {
+        fmt.Println(node.Value)
+    }
+    // 打印右子树
+    node.Right.MidOrder()
+}
+```
+
+查找操作逻辑与通用的二叉查找树一样,并无却别
+
+## AVL树删除元素
+删除元素有四种情况:
+
+1. 删除的节点是叶子节点,没有儿子,直接删除后看离它最近的父亲节点是否失衡,做调整操作.
+2. 删除的节点下有两个子树,选择高度更高的子树下的节点来替换被删除的节点,如果左子树更高,选择左子树中最大的节点,也就是左子树最右边的叶子节点,如果右子树更高,选择右子树中最小的节点,也就是右子树最左边的叶子节点.最后,删除这个叶子节点,也就是变成情况1.
+3. 删除的节点只有左子树,可以知道左子树其实就只有一个节点,被删除的节点本身(假设左子树多于2个节点,那么高度差就等于2了,不符合AVL树定义),将左节点替换被删除的节点,最后删除这个左节点,变成情况1
+4. 删除的节点只有右子树,可以知道右子树其实只有一个节点,被删除节点本身(假设右子树多于2个节点,那么高度差就等于2了,不符合AVL树定义),将右节点替换被删除的节点,最后删除这个右节点,变成情况1.
+
+后面三种情况都变成`情况1`,就是将删除的节点变成叶子节点,然后可以直接删除该叶子节点,然后看其最近的父亲节点是否失衡,失衡时对树进行平衡.如图:
+![avl_tree_delete1.jpg](./assets/avl_tree_delete1.jpg)
+
+删除节点24,导致节点26的子树不平衡,这时需要对该子树进行旋转,如图:
+![avl_tree_delete2.jpg](./assets/avl_tree_delete2.jpg)
+
+可以发现这时树仍然不平衡,这时是节点22的子树不平衡,需要继续旋转,如图:
+![avl_tree_delete3.jpg](./assets/avl_tree_delete3.jpg)
+
+实现代码:
+```go
+func (node *AVLTreeNode) Delete(value int64) *AVLTreeNode {
+    if node == nil {
+        // 如果是空树，直接返回
+        return nil
+    }
+    if value < node.Value {
+        // 从左子树开始删除
+        node.Left = node.Left.Delete(value)
+        // 删除后要更新该子树高度
+        node.Left.UpdateHeight()
+    } else if value > node.Value {
+        // 从右子树开始删除
+        node.Right = node.Right.Delete(value)
+        // 删除后要更新该子树高度
+        node.Right.UpdateHeight()
+    } else {
+        // 找到该值对应的节点
+        // 该节点没有左右子树
+        // 第一种情况，删除的节点没有儿子，直接删除即可。
+        if node.Left == nil && node.Right == nil {
+            return nil // 直接返回nil，表示直接该值删除
+        }
+        // 该节点有两棵子树，选择更高的哪个来替换
+        // 第二种情况，删除的节点下有两个子树，选择高度更高的子树下的节点来替换被删除的节点，如果左子树更高，选择左子树中最大的节点，也就是左子树最右边的叶子节点，如果右子树更高，选择右子树中最小的节点，也就是右子树最左边的叶子节点。最后，删除这个叶子节点。
+        if node.Left != nil && node.Right != nil {
+            // 左子树更高，拿左子树中最大值的节点替换
+            if node.Left.Height > node.Right.Height {
+                maxNode := node.Left
+                for maxNode.Right != nil {
+                    maxNode = maxNode.Right
+                }
+                // 最大值的节点替换被删除节点
+                node.Value = maxNode.Value
+                node.Times = maxNode.Times
+                // 把最大的节点删掉
+                node.Left = node.Left.Delete(maxNode.Value)
+                // 删除后要更新该子树高度
+                node.Left.UpdateHeight()
+            } else {
+                // 右子树更高，拿右子树中最小值的节点替换
+                minNode := node.Right
+                for minNode.Left != nil {
+                    minNode = minNode.Left
+                }
+                // 最小值的节点替换被删除节点
+                node.Value = minNode.Value
+                node.Times = minNode.Times
+                // 把最小的节点删掉
+                node.Right = node.Right.Delete(minNode.Value)
+                // 删除后要更新该子树高度
+                node.Right.UpdateHeight()
+            }
+        } else {
+            // 只有左子树或只有右子树
+            // 只有一个子树，该子树也只是一个节点，将该节点替换被删除的节点，然后置子树为空
+            if node.Left != nil {
+                //第三种情况，删除的节点只有左子树，因为树的特征，可以知道左子树其实就只有一个节点，它本身，否则高度差就等于2了。
+                node.Value = node.Left.Value
+                node.Times = node.Left.Times
+                node.Height = 1
+                node.Left = nil
+            } else if node.Right != nil {
+                //第四种情况，删除的节点只有右子树，因为树的特征，可以知道右子树其实就只有一个节点，它本身，否则高度差就等于2了。
+                node.Value = node.Right.Value
+                node.Times = node.Right.Times
+                node.Height = 1
+                node.Right = nil
+            }
+        }
+        // 找到值后，进行替换删除后，直接返回该节点
+        return node
+    }
+    // 左右子树递归删除节点后需要平衡
+    var newNode *AVLTreeNode
+    // 相当删除了右子树的节点，左边比右边高了，不平衡
+    if node.BalanceFactor() == 2 {
+        if node.Left.BalanceFactor() >= 0 {
+            newNode = RightRotation(node)
+        } else {
+            newNode = LeftRightRotation(node)
+        }
+        //  相当删除了左子树的节点，右边比左边高了，不平衡
+    } else if node.BalanceFactor() == -2 {
+        if node.Right.BalanceFactor() <= 0 {
+            newNode = LeftRotation(node)
+        } else {
+            newNode = RightLeftRotation(node)
+        }
+    }
+    if newNode == nil {
+        node.UpdateHeight()
+        return node
+    } else {
+        newNode.UpdateHeight()
+        return newNode
+    }
+}
+```
+
+当删除的值不等于当前节点的值时,在响应的子树中递归删除,递归过程中会自底向上维护AVL树的特征.
+
+> 小于删除的值 `value < node.Value`，在左子树中递归删除：`node.Left = node.Left.Delete(value)`。
+> 大于删除的值 `value > node.Value`，在右子树中递归删除：`node.Right = node.Right.Delete(value)`。
+
+因为删除后可能因为旋转调整,导致树根节点变了,这时会返回新的树根,递归删除后需要将返回的新根节点赋予原来的老根节点.
+
+情况1:找到要删除的值时,该值是叶子节点,直接删除节点即可:
+```go
+// 第一种情况，删除的节点没有儿子，直接删除即可。
+if node.Left == nil && node.Right == nil {
+    return nil // 直接返回nil，表示直接该值删除
+}
+```
+
+情况2:删除的节点有两颗子树,选择高度更高的子树下的节点来替换被删除的节点:
+```go
+        // 该节点有两棵子树，选择更高的哪个来替换
+        // 第二种情况，删除的节点下有两个子树，选择高度更高的子树下的节点来替换被删除的节点，如果左子树更高，选择左子树中最大的节点，也就是左子树最右边的叶子节点，如果右子树更高，选择右子树中最小的节点，也就是右子树最左边的叶子节点。最后，删除这个叶子节点。
+        if node.Left != nil && node.Right != nil {
+            // 左子树更高，拿左子树中最大值的节点替换
+            if node.Left.Height > node.Right.Height {
+                maxNode := node.Left
+                for maxNode.Right != nil {
+                    maxNode = maxNode.Right
+                }
+                // 最大值的节点替换被删除节点
+                node.Value = maxNode.Value
+                node.Times = maxNode.Times
+                // 把最大的节点删掉
+                node.Left = node.Left.Delete(maxNode.Value)
+                // 删除后要更新该子树高度
+                node.Left.UpdateHeight()
+            } else {
+                // 右子树更高，拿右子树中最小值的节点替换
+                minNode := node.Right
+                for minNode.Left != nil {
+                    minNode = minNode.Left
+                }
+                // 最小值的节点替换被删除节点
+                node.Value = minNode.Value
+                node.Times = minNode.Times
+                // 把最小的节点删掉
+                node.Right = node.Right.Delete(minNode.Value)
+                // 删除后要更新该子树高度
+                node.Right.UpdateHeight()
+            }
+        }
+```
+
+情况3和4:如果被删除的节点只有一个子树,那么该子树一定没有儿子,不然树的高度就大于1了,所以直接替换值后删除该子树节点:
+```go
+    // 只有左子树或只有右子树
+    // 只有一个子树，该子树也只是一个节点，将该节点替换被删除的节点，然后树为空
+    if node.Left != nil {
+        //第三种情况，删除的节点只有左子树，因为树的特征，可以知道左子树就只有一个节点，它本身，否则高度差就等于2了。
+        node.Value = node.Left.Value
+        node.Times = node.Left.Times
+        node.Height = 1
+        node.Left = nil
+    } else if node.Right != nil {
+        //第四种情况，删除的节点只有右子树，因为树的特征，可以知道右子树就只有一个节点，它本身，否则高度差就等于2了。
+        node.Value = node.Right.Value
+        node.Times = node.Right.Times
+        node.Height = 1
+        node.Right = nil
+    }
+```
+
+核心在于删除后的旋转调整,如果删除的值不匹配当前节点的值,对当前节点的左右子树进行递归删除,递归后该节点为根节点的子树可能不平衡,我们需要判断后决定要不要旋转这棵树.
+
+每次递归都是自底向上,从很小的子树到很大的子树,如果自底向上每棵树都进行调整,约束在数的高度差不超过1,那么整棵树自然也符合AVL数的平衡规则.
+
+删除元素后,如果子树平衡,需要进行调整操作,主要有两种:删除后左子树比右子树高,删除后右子树比左子树高.
+
+### 删除后,左子树比右子树高
+如果删了右子树的节点,左边比右边高了,不平衡了:
+```go
+    // 相当删除了右子树的节点，左边比右边高了，不平衡
+    if node.BalanceFactor() == 2 {
+        if node.Left.BalanceFactor() >= 0 {
+            newNode = RightRotation(node)
+        } else {
+            newNode = LeftRightRotation(node)
+        }
+    }
+```
+
+为什么要这么调整呢?如图:
+![right_avl_tree2.png](./assets/right_avl_tree2.png)
+
+1. `黄色点5.BalanceFactor() == 2`，对应：`node.BalanceFactor() == 2`。
+2. `绿色点3.BalanceFactor() == 1`，对应：`node.Left.BalanceFactor() == 1`。
+
+所以需要右旋:`newNode = RightRotation(node)`
+![left_right_avl_tree3.png](./assets/left_right_avl_tree3.png)
+
+1. `黄色点5.BalanceFactor() == 2`，对应：`node.BalanceFactor() == 2`
+2. `绿色点3.BalanceFactor() == -1`，对应：`node.Left.BalanceFactor() == -1`
+
+所以应该需要先左后右旋:`newNode = LeftRightRotation(node)`
+
+还有一种特殊情况:和上面的都不一样,如图:
+![avl_tree_sp1.jpg](./assets/avl_tree_sp1.jpg)
+
+我们如果删除节点22或节点23,这个时候根节点20失衡了
+
+1. 根节点 20 的左子树比右子树高了 2 层，对应：`node.BalanceFactor() == 2`
+2. 左子树节点 13 并没有失衡，对应：`node.BalanceFactor() == 0`
+
+这个时候,无论使用右旋,还是先左旋后右旋都可以使树恢复平衡,我们的if判断条件使用了右旋
+
+如果先左旋后右旋,那么旋转后恢复平衡,如图:
+![avl_tree_sp2.jpg](./assets/avl_tree_sp2.jpg)
+
+
+如果使用右旋,如图:
+![avl_tree_sp3.jpg](./assets/avl_tree_sp3.jpg)
+
+### 删除后,右子树比左子树高
+如果删除了左子树的节点,右边比左边高来,不平衡了:
+```go
+//  相当删除了左子树的节点，右边比左边高了，不平衡
+if node.BalanceFactor() == -2 {
+    if node.Right.BalanceFactor() <= 0 {
+    newNode = LeftRotation(node)
+    } else {
+    newNode = RightLeftRotation(node)
+    }
+}
+```
+
+如图:
+![left_avl_tree2.png](./assets/left_avl_tree2.png)
+
+可以得知:
+1. `绿色点3.BalanceFactor() == -2`，对应：`node.BalanceFactor() == -2`
+2. `黄色点5.BalanceFactor() == -1`，对应：`node.Left.BalanceFactor() == -1`
+
+所以应该需要左旋: `newNode = LeftRotation(node)`
+
+如图:
+![right_left_avl_tree2.png](./assets/right_left_avl_tree2.png)
+
+可以得知:
+1. `绿色点3.BalanceFactor() == -2`，对应：`node.BalanceFactor() == -2`
+2. `黄色点5.BalanceFactor() == 1`，对应：`node.Left.BalanceFactor() == 1`
+
+所以应该需压先右后左旋:`newNode = RightLeftRotation(node)`
+
+### 删除后,调整树高度
+进行调整操作后,需要更新该子树的高度,如果没有旋转过,更新之前节点的树高度.如果曾经旋转过,树根变了,更新新的树根节点高度.
+
+```go
+    if newNode == nil {
+        node.UpdateHeight()
+        return node
+    } else {
+        newNode.UpdateHeight()
+        return newNode
+    }
+```
+
+### 时间复杂度分析
+删除操作是先找到删除的节点,然后该节点与一个叶子节点交换,接着删除叶子节点,最后叶子节点的父层逐层向上旋转调整.
+
+删除操作的时间复杂度和添加操作一样,区别在于,添加操作最多旋转两次就可以达到树的平衡,而删除操作可能会旋转超过两次.
+
+如图,是一棵比较糟糕的AVL树:
+![avl_tree_delete_worst.jpg](./assets/avl_tree_delete_worst.jpg)
+
+删除节点,旋转可以一直旋转到根节点,比插入旋转最多旋转2次的次数更多.
+
+## 验证是否是一棵AVL树
+
+## AVL树完整代码
+程序`AVLTree`
